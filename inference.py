@@ -11,12 +11,12 @@ from environment import Action, VulnPatchEnv
 # Strict Environment Variables required by the hackathon rubric
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 if not HF_TOKEN:
     print("WARNING: HF_TOKEN is missing. API calls will fail.", flush=True)
 
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or "dummy-key")
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 
 def run_episode(task_name: str):
