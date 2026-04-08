@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "vuln-patch-env"
+version = "1.0.0"
+description = "A real-world code security environment where AI agents detect and patch vulnerabilities"
+requires-python = ">=3.10"
+dependencies = [
+    "openai",
+    "pydantic",
+    "fastapi",
+    "uvicorn",
+    "openenv-core",
+    "python-dotenv",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[project.urls]
+Homepage = "https://huggingface.co/spaces"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["server"]
+package-dir = { "server" = "server" }
+
+[tool.openenv]
+environment = "environment:VulnPatchEnv"

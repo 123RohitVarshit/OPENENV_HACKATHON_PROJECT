@@ -1,0 +1,8 @@
+name: "vuln-patch-env"
+version: "1.0.0"
+entrypoint: "environment:VulnPatchEnv"
+description: "A real-world code security environment where agents detect and patch CVEs (Hardcoded Secrets, SQLi, Command Injection) without breaking functionality."
+tasks:
+  - easy
+  - medium
+  - hard
