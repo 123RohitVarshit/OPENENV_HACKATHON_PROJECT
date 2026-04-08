@@ -1,3 +1,18 @@
+---
+title: Vuln-Patch-Env
+emoji: 🛡️
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+tags:
+  - openenv
+  - reinforcement-learning
+  - code-security
+  - vulnerability-patching
+---
+
 # Vuln-Patch-Env
 
 A real-world OpenEnv environment for training and evaluating AI agents on automated code vulnerability detection and patching.
