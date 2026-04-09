@@ -216,8 +216,8 @@ class VulnPatchEnv:
             self.done = True
             reward_val -= 0.2
 
-        # Ensure reward is strictly between 0.0 and 1.0 per OpenEnv spec requirement
-        reward_val = min(max(reward_val, 0.0), 1.0)
+        # Clamp reward strictly within open interval (0, 1) — 0.0 and 1.0 are not allowed
+        reward_val = min(max(reward_val, 0.01), 0.99)
 
         return self.state(), Reward(value=reward_val), self.done, Info()
 

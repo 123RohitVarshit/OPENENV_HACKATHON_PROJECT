@@ -82,8 +82,11 @@ def run_episode(task_name: str):
     finally:
         env.close()
         # REQUIRED [END] line — always emitted even on exception, score to 2 decimal places
-        score = rewards[-1] if rewards else 0.0
-        score = min(max(score, 0.0), 1.0)  # Clamp score to 0.0 - 1.0
+        score = rewards[-1] if rewards else 0.01
+        score = min(
+            max(score, 0.01), 0.99
+        )  # Strictly within (0, 1) — exclusive of 0 and 1
+
         success_str = "true" if score >= 0.8 else "false"
         rewards_str = ",".join([f"{r:.2f}" for r in rewards])
         print(
