@@ -1,0 +1,34 @@
+name: Keep HF Space Alive
+
+on:
+  schedule:
+    - cron: "*/25 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping HuggingFace Space
+        run: |
+          echo "Pinging Space at $(date)"
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            https://rohitc1612-vuln-patch-env.hf.space/health)
+
+          echo "Health endpoint returned: $STATUS"
+
+          if [ "$STATUS" = "200" ]; then
+            echo "Space is alive and healthy."
+          else
+            echo "ERROR: Space returned status $STATUS — it may be down or sleeping."
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Space health check failed. Check your HF Space at:"
+          echo "https://huggingface.co/spaces/rohitc1612/vuln-patch-env"
+          echo "Logs: https://huggingface.co/spaces/rohitc1612/vuln-patch-env/logs"
