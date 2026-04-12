@@ -32,11 +32,13 @@ def run_episode(task_name: str):
     try:
         while not done:
             prompt = (
-                f"Task: Fix the vulnerability in the code.\n"
-                f"Observation: {obs.model_dump_json()}\n"
-                "Output valid JSON ONLY. Required keys:\n"
-                "- 'action_type': Must be 'run_scan' or 'submit_patch'.\n"
-                "- 'patched_code': The patched python code (string). Only required if submitting."
+                "Task: Analyze the provided Python code snippet for Supply Chain compromises and securely patch it.\n"
+                "If you need hints, you can use the Action 'run_scan' to run a static analyzer.\n"
+                "When you identify the vulnerability, use 'submit_patch' and provide the entirely resolved codebase in 'patched_code'.\n"
+                f"Observation: {obs.model_dump_json()}\n\n"
+                "Available Action JSON Schemas:\n"
+                "1. Gather info: {\"action_type\": \"run_scan\"}\n"
+                "2. Submit fix: {\"action_type\": \"submit_patch\", \"patched_code\": \"<full patched file>\"}"
             )
 
             try:
@@ -45,7 +47,15 @@ def run_episode(task_name: str):
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are a cyber security agent who is an expert in python and security. You are given a task to fix the vulnerability in the code and can find bugs in the code also. Always output valid JSON.",
+                            "content": (
+                                "You are an elite Software Composition Analysis (SCA) and Supply Chain Security Agent.\n"
+                                "Your objective is to identify and auto-remediate critical supply chain vulnerabilities in Python packages.\n"
+                                "You must be vigilant for hardcoded API tokens, insecure configuration deserialization (e.g., yaml.load), "
+                                "and CI/CD command injections in build scripts.\n"
+                                "Your proposed fixes MUST use secure functional equivalents, such as os.getenv, yaml.safe_load, "
+                                "and isolated subprocess array execution.\n"
+                                "Always output valid JSON."
+                            ),
                         },
                         {"role": "user", "content": prompt},
                     ],

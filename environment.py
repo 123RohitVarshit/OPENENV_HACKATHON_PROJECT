@@ -46,46 +46,42 @@ def uses_os_getenv(code: str) -> bool:
                     return True
                 if isinstance(func, ast.Name) and func.id == "getenv":
                     return True
-                # Pattern 2: os.environ.get(...) — chained call
-                if (
-                    isinstance(func, ast.Attribute)
-                    and func.attr == "get"
-                    and isinstance(func.value, ast.Attribute)
-                    and func.value.attr == "environ"
-                ):
-                    return True
-            # Pattern 3: os.environ["KEY"] — subscript access
+                # Pattern 2: os.environ.get(...) or environ.get(...)
+                if isinstance(func, ast.Attribute) and func.attr == "get":
+                    if isinstance(func.value, ast.Attribute) and func.value.attr == "environ":
+                        return True
+                    if isinstance(func.value, ast.Name) and func.value.id == "environ":
+                        return True
+            # Pattern 3: os.environ["KEY"] or environ["KEY"]
             if isinstance(node, ast.Subscript):
                 val = node.value
                 if isinstance(val, ast.Attribute) and val.attr == "environ":
                     return True
+                if isinstance(val, ast.Name) and val.id == "environ":
+                    return True
             # Pattern 4: bare os.environ reference (e.g. env = os.environ)
             if isinstance(node, ast.Attribute) and node.attr == "environ":
+                return True
+            if isinstance(node, ast.Name) and node.id == "environ":
                 return True
     except SyntaxError:
         pass
     return False
 
 
-def uses_parameterized_query(code: str) -> bool:
+def uses_safe_yaml(code: str) -> bool:
+    """
+    Returns True if the agent securely parses YAML using safe_load.
+    """
     try:
         tree = ast.parse(code)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
-                # Simple heuristic mapping for typical execution paths
-                if hasattr(node.func, "attr") and node.func.attr == "execute":
-                    # length of args > 1 indicates query + params, or uses named keywords like parameters=...
-                    if len(node.args) > 1 or (
-                        node.keywords
-                        and any(
-                            k.arg in ("parameters", "params") for k in node.keywords
-                        )
-                    ):
-                        return True
-                    # Check if any arg is explicitly a tuple or dictionary, common in SQLite parameterization
-                    for arg in node.args:
-                        if isinstance(arg, ast.Tuple) or isinstance(arg, ast.Dict):
-                            return True
+                func = node.func
+                if isinstance(func, ast.Attribute) and func.attr == "safe_load":
+                    return True
+                if isinstance(func, ast.Name) and func.id == "safe_load":
+                    return True
     except SyntaxError:
         pass
     return False
@@ -113,9 +109,11 @@ def uses_safe_subprocess(code: str) -> bool:
                         ):
                             is_shell = True
                     if not is_shell:
-                        # Ensure first argument is a list (args array)
-                        if node.args and isinstance(node.args[0], ast.List):
-                            return True
+                        # Ensure first argument is a list or a variable reference
+                        if node.args:
+                            arg0 = node.args[0]
+                            if isinstance(arg0, (ast.List, ast.Name)):
+                                return True
     except SyntaxError:
         pass
     return False
@@ -138,26 +136,60 @@ class VulnPatchEnv:
         self.done = False
         self.linter = "Not run yet."
 
-        # Dynamic variable generation prevents simple string memorization by the LLM
         if self.task == "easy":
             key_val = "sk-" + "".join(
                 random.choices(string.ascii_uppercase + string.digits, k=16)
             )
-            var_name = random.choice(
-                ["API_KEY", "SECRET_KEY", "AUTH_TOKEN", "ACCESS_KEY"]
-            )
-            func_name = random.choice(["get_data", "fetch_resource", "load_user"])
-            self.code = f"import os\n\ndef {func_name}():\n    {var_name} = '{key_val}'\n    return fetch({var_name})"
+            # A real-looking build deployment script finding
+            self.code = f"""import os
+import requests
+
+def upload_package_to_pypi(package_data):
+    # Fallback legacy token (CVE-798 Supply Chain Leak)
+    PYPI_API_TOKEN = '{key_val}'
+    
+    headers = {{"Authorization": f"Bearer {{PYPI_API_TOKEN}}"}}
+    response = requests.post("https://upload.pypi.org/legacy/", data=package_data, headers=headers)
+    return response.status_code
+"""
             self.target_secret = key_val
 
         elif self.task == "medium":
-            table = random.choice(["users", "accounts", "employees", "orders"])
-            field = random.choice(["name", "email", "username", "id"])
-            self.code = f"import sqlite3\n\ndef get_{table}({field}):\n    query = f\"SELECT * FROM {table} WHERE {field}='{{{field}}}'\"\n    cursor.execute(query)"
+            # Realistic yaml config loader
+            self.code = """import yaml
+import os
+
+def load_project_config(config_path):
+    \"\"\"Reads the project.yaml configuration file for the build properties.\"\"\"
+    if not os.path.exists(config_path):
+        return {}
+    
+    with open(config_path, 'r') as f:
+        # Vulnerable to arbitrary code execution (CVE-502)
+        config_data = yaml.load(f.read())
+        
+    return config_data
+"""
+            self.target_secret = ""
 
         elif self.task == "hard":
-            cmd = random.choice(["ping -c 4", "ls -l", "curl", "nmap"])
-            self.code = f"import os\nimport subprocess\n\ndef run_util(user_arg):\n    os.system(f'{cmd} {{user_arg}}')"
+            self.code = """import os
+import subprocess
+from setuptools import setup, find_packages
+
+# Example extracted from vulnerable setup.py / CI workflow
+def run_pre_build_validation(repo_url):
+    print("Running arbitrary validations before build...")
+    # Vulnerable to command injection (CWE-78) via unsanitized strings
+    os.system(f"git clone {repo_url} /tmp/repo_check")
+
+setup(
+    name="my_secure_package",
+    version="1.0.0",
+    packages=find_packages(),
+)
+"""
+            self.target_secret = ""
 
         else:
             self.code = "Unknown task."
@@ -178,7 +210,7 @@ class VulnPatchEnv:
         reward_val = 0.0
 
         if action.action_type == "run_scan":
-            self.linter = "SECURITY SCAN: Vulnerability detected. Fix hardcoded secrets, SQLi, or Command Injection."
+            self.linter = "SECURITY SCAN (Supply Chain): Vulnerability detected. Fix hardcoded secrets, insecure deserialization (yaml), or CI command injection."
             reward_val = 0.1  # Incremental progress signal
 
         elif action.action_type == "submit_patch":
@@ -192,11 +224,11 @@ class VulnPatchEnv:
                     reward_val += 0.5
 
             elif self.task == "medium":
-                if 'f"SELECT' not in patched and "f'SELECT" not in patched:
-                    reward_val += 0.4
-                if uses_parameterized_query(patched):
-                    reward_val += 0.6
-                elif "?" in patched or "%s" in patched:  # Fallback text format check
+                if "yaml.load(" not in patched and "yaml.load (" not in patched:
+                    reward_val += 0.3
+                if uses_safe_yaml(patched):
+                    reward_val += 0.7
+                elif "yaml.safe_load" in patched or "safe_load" in patched:
                     reward_val += 0.4
 
             elif self.task == "hard":
